@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Scheduler</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { margin: 20px; }
+        .form-section { margin-bottom: 40px; }
+        .task-list { margin-top: 20px; }
+        .task { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-section">
+            <h2>Register and Login</h2>
+            <div class="row">
+                <div class="col-md-6">
+                    <h4>Register</h4>
+                    <form id="registerForm">
+                        <div class="form-group">
+                            <label for="registerUsername">Username:</label>
+                            <input type="text" class="form-control" id="registerUsername" name="username" value="skt" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Register</button>
+                    </form>
+                </div>
+                <div class="col-md-6">
+                    <h4>Login</h4>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="loginUsername">Username:</label>
+                            <input type="text" class="form-control" id="loginUsername" name="username" value="a" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginToken">Token:</label>
+                            <input type="text" class="form-control" id="loginToken" name="token" value="123" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <h2>Schedule Task</h2>
+        <form id="scheduleForm">
+            <div class="form-group">
+                <label for="taskName">Task Name:</label>
+                <input type="text" class="form-control" id="taskName" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="taskMessage">Task Message:</label>
+                <input type="text" class="form-control" id="taskMessage" name="message" required>
+            </div>
+            <div class="form-group">
+                <label for="taskURL">Task URL:</label>
+                <input type="text" class="form-control" id="taskURL" name="url" required>
+            </div>
+            <div class="form-group">
+                <label for="taskInterval">Interval (in seconds):</label>
+                <input type="number" class="form-control" id="taskInterval" name="interval" required>
+            </div>
+            <div class="form-group row">
+                <label for="taskStart" class="col-sm-4 col-form-label">Start Time (Unix):</label>
+                <div class="col-sm-8 input-group">
+                    <input type="number" class="form-control" id="taskStart" name="start" required>
+                    <div class="input-group-append">
+                        <button type="button" id="nowButton" class="btn btn-secondary">NOW</button>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="taskEnd">End Time (Unix):</label>
+                <input type="number" class="form-control" id="taskEnd" name="end" required>
+            </div>
+            <div class="form-group form-check">
+                <input type="checkbox" class="form-check-input" id="isRecurring" name="is_recurring">
+                <label class="form-check-label" for="isRecurring">Is Recurring</label>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="isEnabled" name="enabled" checked>
+                <label class="form-check-label" for="isEnabled">Enable Task</label>
+            </div>
+            <button type="submit" class="btn btn-success">Schedule Task</button>
+        </form>
+
+        <button id="fetchTasksButton" class="btn btn-info mt-3">Fetch Tasks</button>
+        <div class="task-list" id="taskList"></div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        let username = 'a'; // Default username
+        let token = '123'; // Default token
+
+        document.getElementById('registerForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const usernameInput = document.getElementById('registerUsername').value;
+
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: usernameInput }),
+            });
+            const data = await response.json();
+            alert(data.message);
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const usernameInput = document.getElementById('loginUsername').value;
+            const tokenInput = document.getElementById('loginToken').value;
+
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: usernameInput, token: tokenInput }),
+            });
+            const data = await response.json();
+            alert(data.message);
+        });
+
+        document.getElementById('scheduleForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const name = document.getElementById('taskName').value;
+            const message = document.getElementById('taskMessage').value;
+            const url = document.getElementById('taskURL').value;
+            const interval = parseInt(document.getElementById('taskInterval').value, 10);
+            const start = parseInt(document.getElementById('taskStart').value, 10);
+            const end = parseInt(document.getElementById('taskEnd').value, 10);
+            const isRecurring = document.getElementById('isRecurring').checked;
+            const isEnabled = document.getElementById('isEnabled').checked;
+
+            const response = await fetch('/schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, token, name, message, url, interval, start, end, is_recurring: isRecurring, enabled: isEnabled }),
+            });
+            const data = await response.json();
+            alert(data.message);
+        });
+
+        document.getElementById('fetchTasksButton').addEventListener('click', async () => {
+            const response = await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, token }),
+            });
+
+            const data = await response.json();
+            if (data.tasks) {
+                displayTasks(data.tasks);
+            } else {
+                console.error('No tasks received:', data);
+            }
+        });
+
+        document.getElementById('nowButton').addEventListener('click', function() {
+            const now = Math.floor(Date.now() / 1000);
+            document.getElementById('taskStart').value = now;
+            document.getElementById('taskEnd').value = now + 10; // Set end to now + 10 seconds
+        });
+
+        function displayTasks(tasks) {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = ''; // Clear existing tasks
+
+            tasks.forEach(task => {
+                const taskDiv = document.createElement('div');
+                taskDiv.classList.add('task');
+                taskDiv.innerHTML = `
+                    <strong>Task:</strong> ${task.message}<br>
+                    <strong>Task Name:</strong> ${task.name}<br>
+                    <strong>URL:</strong> ${task.url}<br>
+                    <strong>Interval:</strong> ${task.interval} seconds<br>
+                    <strong>Start:</strong> ${new Date(task.start * 1000).toLocaleString()}<br>
+                    <strong>End:</strong> ${new Date(task.end * 1000).toLocaleString()}<br>
+                    <strong>Recurring:</strong> ${task.is_recurring ? 'Yes' : 'No'}<br>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="toggle-${task.id}" ${task.enabled ? 'checked' : ''} onchange="toggleTaskEnabled(${task.id}, this.checked)">
+                        <label class="form-check-label" for="toggle-${task.id}">Enabled</label>
+                    </div>
+                `;
+                taskList.appendChild(taskDiv);
+            });
+        }
+
+        async function toggleTaskEnabled(taskId, enabled) {
+            const response = await fetch('/api/tasks/set-enabled', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username,
+                    token,
+                    task_id: taskId,
+                    enabled,
+                }),
+            });
+
+            if (response.ok) {
+                console.log(`Task ID '${taskId}' set to enabled: ${enabled}`);
+            } else {
+                console.error('Error updating task enabled status');
+            }
+        }
+    </script>
+</body>
+</html>
