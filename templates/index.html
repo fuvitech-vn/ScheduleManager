@@ -22,7 +22,7 @@
                     <form id="registerForm">
                         <div class="form-group">
                             <label for="registerUsername">Username:</label>
-                            <input type="text" class="form-control" id="registerUsername" name="username" value="skt" required>
+                            <input type="text" class="form-control" id="registerUsername" name="username" required>
                         </div>
                         <button type="submit" class="btn btn-primary">Register</button>
                     </form>
@@ -32,11 +32,11 @@
                     <form id="loginForm">
                         <div class="form-group">
                             <label for="loginUsername">Username:</label>
-                            <input type="text" class="form-control" id="loginUsername" name="username" value="a" required>
+                            <input type="text" class="form-control" id="loginUsername" name="username" required>
                         </div>
                         <div class="form-group">
                             <label for="loginToken">Token:</label>
-                            <input type="text" class="form-control" id="loginToken" name="token" value="123" required>
+                            <input type="text" class="form-control" id="loginToken" name="token" required>
                         </div>
                         <button type="submit" class="btn btn-primary">Login</button>
                     </form>
@@ -95,8 +95,8 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 
     <script>
-        let username = 'a'; // Default username
-        let token = '123'; // Default token
+        let username = ''; // Initialize username
+        let token = ''; // Initialize token
 
         document.getElementById('registerForm').addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -113,13 +113,13 @@
 
         document.getElementById('loginForm').addEventListener('submit', async (event) => {
             event.preventDefault();
-            const usernameInput = document.getElementById('loginUsername').value;
-            const tokenInput = document.getElementById('loginToken').value;
+            username = document.getElementById('loginUsername').value;
+            token = document.getElementById('loginToken').value;
 
             const response = await fetch('/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: usernameInput, token: tokenInput }),
+                body: JSON.stringify({ username, token }),
             });
             const data = await response.json();
             alert(data.message);
@@ -146,6 +146,9 @@
         });
 
         document.getElementById('fetchTasksButton').addEventListener('click', async () => {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = ''; // Clear existing tasks
+
             const response = await fetch('/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -168,7 +171,6 @@
 
         function displayTasks(tasks) {
             const taskList = document.getElementById('taskList');
-            taskList.innerHTML = ''; // Clear existing tasks
 
             tasks.forEach(task => {
                 const taskDiv = document.createElement('div');
@@ -185,6 +187,7 @@
                         <input class="form-check-input" type="checkbox" id="toggle-${task.id}" ${task.enabled ? 'checked' : ''} onchange="toggleTaskEnabled(${task.id}, this.checked)">
                         <label class="form-check-label" for="toggle-${task.id}">Enabled</label>
                     </div>
+                    <button class="btn btn-danger btn-sm" onclick="deleteTask(${task.id})">Delete Task</button>
                 `;
                 taskList.appendChild(taskDiv);
             });
@@ -206,6 +209,28 @@
                 console.log(`Task ID '${taskId}' set to enabled: ${enabled}`);
             } else {
                 console.error('Error updating task enabled status');
+            }
+        }
+
+        async function deleteTask(taskId) {
+            const response = await fetch('/api/tasks/delete', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username,
+                    token,
+                    task_id: taskId,
+                }),
+            });
+
+            if (response.ok) {
+                alert(`Task ID '${taskId}' deleted successfully.`);
+                // Refresh the task list
+                document.getElementById('fetchTasksButton').click();
+            } else {
+                console.error('Error deleting task');
+                const data = await response.json();
+                alert(data.error || 'Failed to delete task');
             }
         }
     </script>
