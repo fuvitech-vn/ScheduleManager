@@ -5,8 +5,8 @@ services:
     build: .
     container_name: ManageSchedules
     ports:
-      - "3000:3000"
+      - "3003:3000"
     restart: always
     volumes:
-      - ./tasks.db:/app/tasks.db
+      - ./db/:/app/db/
     # command: exec /app/run

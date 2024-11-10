@@ -1,6 +1,6 @@
 module ManagerSchdule
 
-go 1.21.1
+go 1.23.3
 
 require (
 	github.com/go-co-op/gocron v1.37.0

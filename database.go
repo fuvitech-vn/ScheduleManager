@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"os"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -11,7 +12,15 @@ var db *sql.DB
 
 func init() {
 	var err error
-	db, err = sql.Open("sqlite3", "./tasks.db")
+	// create directory if it doesn't exist
+	_, err = os.Stat("./db")
+	if os.IsNotExist(err) {
+		err = os.Mkdir("./db", 0755)
+		if err != nil {
+			log.Fatal("Error creating db directory:", err)
+		}
+	}
+	db, err = sql.Open("sqlite3", "./db/tasks.db")
 	if err != nil {
 		log.Fatal("Error opening database:", err)
 	}

@@ -123,6 +123,9 @@
             });
             const data = await response.json();
             alert(data.message);
+            if (data.success) { // Check if login was successful
+                fetchTasks(); // Fetch tasks immediately after successful login
+            }
         });
 
         document.getElementById('scheduleForm').addEventListener('submit', async (event) => {
@@ -143,9 +146,14 @@
             });
             const data = await response.json();
             alert(data.message);
+            if (data.success) { // Check if scheduling was successful
+                fetchTasks(); // Fetch tasks immediately after scheduling
+            }
         });
 
-        document.getElementById('fetchTasksButton').addEventListener('click', async () => {
+        document.getElementById('fetchTasksButton').addEventListener('click', fetchTasks);
+
+        async function fetchTasks() {
             const taskList = document.getElementById('taskList');
             taskList.innerHTML = ''; // Clear existing tasks
 
@@ -161,7 +169,7 @@
             } else {
                 console.error('No tasks received:', data);
             }
-        });
+        }
 
         document.getElementById('nowButton').addEventListener('click', function() {
             const now = Math.floor(Date.now() / 1000);
@@ -226,7 +234,7 @@
             if (response.ok) {
                 alert(`Task ID '${taskId}' deleted successfully.`);
                 // Refresh the task list
-                document.getElementById('fetchTasksButton').click();
+                fetchTasks();
             } else {
                 console.error('Error deleting task');
                 const data = await response.json();

@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"log"
 	"net/http"
@@ -123,6 +124,17 @@ func scheduleHandler(c *fiber.Ctx) error {
 
 	task.UserID = storedUser.ID
 
+	// Check for uniqueness of user_id and task name
+	var existingTaskID int64
+	err = db.QueryRow("SELECT id FROM tasks WHERE user_id = ? AND name = ?", task.UserID, task.Name).Scan(&existingTaskID)
+	if err == nil {
+		log.Printf("Task with the same user_id and name already exists. Task ID: %d\n", existingTaskID)
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "Task with the same name already exists for this user"})
+	} else if err != sql.ErrNoRows {
+		log.Println("Error checking for existing task in scheduleHandler:", err)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check for existing task"})
+	}
+
 	// Start a transaction
 	tx, err := db.Begin()
 	if err != nil {
@@ -131,8 +143,8 @@ func scheduleHandler(c *fiber.Ctx) error {
 	}
 
 	// Prepare the insert statement within the transaction
-	stmt, err := tx.Prepare(`INSERT INTO tasks(user_id, message, url, interval, start, end, is_recurring, enabled)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
+	stmt, err := tx.Prepare(`INSERT INTO tasks(user_id, name, message, url, interval, start, end, is_recurring, enabled)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
 	if err != nil {
 		log.Println("Error preparing statement in scheduleHandler:", err)
 		tx.Rollback() // Rollback the transaction in case of error
@@ -141,7 +153,7 @@ func scheduleHandler(c *fiber.Ctx) error {
 	defer stmt.Close()
 
 	var lastInsertID int64
-	err = stmt.QueryRow(task.UserID, task.Message, task.URL, task.Interval, task.Start, task.End, task.IsRecurring, true).Scan(&lastInsertID)
+	err = stmt.QueryRow(task.UserID, task.Name, task.Message, task.URL, task.Interval, task.Start, task.End, task.IsRecurring, task.Enabled).Scan(&lastInsertID)
 	if err != nil {
 		log.Println("Error executing statement to schedule task:", err)
 		tx.Rollback() // Rollback the transaction in case of error
@@ -160,13 +172,14 @@ func scheduleHandler(c *fiber.Ctx) error {
 		"task": fiber.Map{
 			"task_id":      lastInsertID,
 			"user_id":      task.UserID,
+			"name":         task.Name, // Assuming the task struct has a Name field
 			"message":      task.Message,
 			"url":          task.URL,
 			"interval":     task.Interval,
 			"start":        task.Start,
 			"end":          task.End,
 			"is_recurring": task.IsRecurring,
-			"enabled":      true, // Default value
+			"enabled":      task.Enabled,
 		},
 	}
 
@@ -234,6 +247,8 @@ func fetchTasksHandler(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
+	log.Printf("Received request to fetch tasks for user: %s\n", req.Username)
+
 	var storedUser User
 	// Check if the user exists and the token is valid
 	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND token = ?", req.Username, req.Token).Scan(&storedUser.ID)
@@ -242,8 +257,10 @@ func fetchTasksHandler(c *fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or token"})
 	}
 
+	log.Printf("User verified. User ID: %d\n", storedUser.ID)
+
 	// Query tasks for the user
-	rows, err := db.Query("SELECT id, message, url, interval, start, end, is_recurring, enabled FROM tasks WHERE user_id = ?", storedUser.ID)
+	rows, err := db.Query("SELECT id, message, name, url, interval, start, end, is_recurring, enabled FROM tasks WHERE user_id = ?", storedUser.ID)
 	if err != nil {
 		log.Println("Error retrieving tasks for user ID:", storedUser.ID, "Error:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve tasks"})
@@ -253,13 +270,74 @@ func fetchTasksHandler(c *fiber.Ctx) error {
 	var tasks []Task
 	for rows.Next() {
 		var task Task
-		if err := rows.Scan(&task.ID, &task.Message, &task.URL, &task.Interval, &task.Start, &task.End, &task.IsRecurring, &task.Enabled); err != nil {
+		if err := rows.Scan(&task.ID, &task.Message, &task.Name, &task.URL, &task.Interval, &task.Start, &task.End, &task.IsRecurring, &task.Enabled); err != nil {
 			log.Println("Error scanning task for user ID:", storedUser.ID, "Error:", err)
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to scan tasks"})
+			// return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to scan tasks"})
+			continue
 		}
 		tasks = append(tasks, task)
 		log.Printf("Task retrieved for user ID %d: %+v\n", storedUser.ID, task)
 	}
 
+	if len(tasks) == 0 {
+		log.Printf("No tasks found for user ID %d\n", storedUser.ID)
+	} else {
+		log.Printf("Total tasks retrieved for user ID %d: %d\n", storedUser.ID, len(tasks))
+	}
+
 	return c.JSON(fiber.Map{"tasks": tasks})
+}
+
+// deleteTaskHandler deletes a task for a specific user based on task ID.
+func deleteTaskHandler(c *fiber.Ctx) error {
+	type request struct {
+		Username string `json:"username"`
+		Token    string `json:"token"`
+		TaskID   int    `json:"task_id"`
+	}
+
+	var req request
+	if err := c.BodyParser(&req); err != nil {
+		log.Println("Error parsing request body in deleteTaskHandler:", err)
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
+	}
+
+	// Verify the user's credentials
+	var storedUser User
+	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND token = ?", req.Username, req.Token).Scan(&storedUser.ID)
+	if err != nil {
+		log.Println("Unauthorized access attempt by user:", req.Username, "Error:", err)
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or token"})
+	}
+
+	// Prepare the delete statement
+	stmt, err := db.Prepare("DELETE FROM tasks WHERE user_id = ? AND id = ?")
+	if err != nil {
+		log.Println("Error preparing statement in deleteTaskHandler:", err)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to prepare delete task"})
+	}
+	defer stmt.Close()
+
+	// Execute the delete statement
+	result, err := stmt.Exec(storedUser.ID, req.TaskID)
+	if err != nil {
+		log.Println("Error executing delete statement in deleteTaskHandler:", err)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete task"})
+	}
+
+	// Check if any rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Println("Error getting rows affected in deleteTaskHandler:", err)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to determine if task was deleted"})
+	}
+
+	if rowsAffected == 0 {
+		log.Printf("No task found with ID %d for user ID %d\n", req.TaskID, storedUser.ID)
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	log.Printf("Task ID %d deleted for user ID %d\n", req.TaskID, storedUser.ID)
+
+	return c.JSON(fiber.Map{"message": "Task deleted successfully"})
 }

@@ -22,6 +22,7 @@ func main() {
 	app.Post("/register", registerHandler)
 	app.Post("/login", loginHandler)
 	app.Post("/schedule", scheduleHandler)
+	app.Delete("/api/tasks/delete", deleteTaskHandler)
 	app.Post("/api/tasks/set-enabled", setTaskEnabledHandler)
 	app.Post("/api/tasks", fetchTasksHandler) // New route for fetching tasks
 

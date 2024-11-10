@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS build
+FROM golang:1.23.3-alpine AS build
 RUN apk add --no-cache gcc musl-dev sqlite sqlite-dev
 WORKDIR /build
 COPY go.mod go.sum ./
