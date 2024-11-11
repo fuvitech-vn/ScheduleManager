@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"log"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -17,12 +16,12 @@ func init() {
 	if os.IsNotExist(err) {
 		err = os.Mkdir("./db", 0755)
 		if err != nil {
-			log.Fatal("Error creating db directory:", err)
+			logx.Fatal("Error creating db directory:", err)
 		}
 	}
 	db, err = sql.Open("sqlite3", "./db/tasks.db")
 	if err != nil {
-		log.Fatal("Error opening database:", err)
+		logx.Fatal("Error opening database:", err)
 	}
 	createTables()
 }
@@ -35,7 +34,7 @@ func createTables() {
     )`
 	_, err := db.Exec(userQuery)
 	if err != nil {
-		log.Fatal("Error creating users table:", err)
+		logx.Fatal("Error creating users table:", err)
 	}
 
 	taskQuery := `CREATE TABLE IF NOT EXISTS tasks (
@@ -54,6 +53,6 @@ func createTables() {
     )`
 	_, err = db.Exec(taskQuery)
 	if err != nil {
-		log.Fatal("Error creating tasks table:", err)
+		logx.Fatal("Error creating tasks table:", err)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
-	"log"
 	"net/http"
 
 	"github.com/gofiber/fiber/v2"
@@ -22,7 +21,7 @@ func generateRandomToken() (string, error) {
 func registerHandler(c *fiber.Ctx) error {
 	var user User
 	if err := c.BodyParser(&user); err != nil {
-		log.Println("Error parsing request body in registerHandler:", err)
+		logx.Println("Error parsing request body in registerHandler:", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
@@ -33,7 +32,7 @@ func registerHandler(c *fiber.Ctx) error {
 		// Generate a random token for other users
 		token, err := generateRandomToken()
 		if err != nil {
-			log.Println("Error generating token:", err)
+			logx.Println("Error generating token:", err)
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 		}
 		user.Token = token
@@ -41,25 +40,25 @@ func registerHandler(c *fiber.Ctx) error {
 
 	stmt, err := db.Prepare("INSERT INTO users(username, token) VALUES(?, ?)")
 	if err != nil {
-		log.Println("Error preparing statement in registerHandler:", err)
+		logx.Println("Error preparing statement in registerHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to register user"})
 	}
 	defer stmt.Close()
 
 	_, err = stmt.Exec(user.Username, user.Token)
 	if err != nil {
-		log.Println("Error executing statement in registerHandler:", err)
+		logx.Println("Error executing statement in registerHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to register user"})
 	}
 
-	log.Printf("User registered: %s, token: %s\n", user.Username, user.Token)
+	logx.Printf("User registered: %s, token: %s\n", user.Username, user.Token)
 	return c.JSON(fiber.Map{"message": "User registered successfully", "token": user.Token})
 }
 
 func loginHandler(c *fiber.Ctx) error {
 	var user User
 	if err := c.BodyParser(&user); err != nil {
-		log.Println("Error parsing request body in loginHandler:", err)
+		logx.Println("Error parsing request body in loginHandler:", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
@@ -71,15 +70,15 @@ func loginHandler(c *fiber.Ctx) error {
 	var storedUser User
 	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND token = ?", user.Username, user.Token).Scan(&storedUser.ID)
 	if err != nil {
-		log.Println("Login failed for user:", user.Username, "Error:", err)
+		logx.Println("Login failed for user:", user.Username, "Error:", err)
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or token"})
 	}
 
-	log.Printf("User logged in: %s\n", user.Username)
+	logx.Printf("User logged in: %s\n", user.Username)
 
 	rows, err := db.Query("SELECT id, message, url, interval, start, end, is_recurring, enabled FROM tasks WHERE user_id = ?", storedUser.ID)
 	if err != nil {
-		log.Println("Error retrieving tasks for user ID:", storedUser.ID, "Error:", err)
+		logx.Println("Error retrieving tasks for user ID:", storedUser.ID, "Error:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve tasks"})
 	}
 	defer rows.Close()
@@ -88,11 +87,11 @@ func loginHandler(c *fiber.Ctx) error {
 	for rows.Next() {
 		var task Task
 		if err := rows.Scan(&task.ID, &task.Message, &task.URL, &task.Interval, &task.Start, &task.End, &task.IsRecurring, &task.Enabled); err != nil {
-			log.Println("Error scanning task for user ID:", storedUser.ID, "Error:", err)
+			logx.Println("Error scanning task for user ID:", storedUser.ID, "Error:", err)
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to scan tasks"})
 		}
 		tasks = append(tasks, task)
-		log.Printf("Task retrieved for user ID %d: %+v\n", storedUser.ID, task)
+		logx.Printf("Task retrieved for user ID %d: %+v\n", storedUser.ID, task)
 	}
 
 	return c.JSON(fiber.Map{
@@ -103,22 +102,23 @@ func loginHandler(c *fiber.Ctx) error {
 }
 
 func scheduleHandler(c *fiber.Ctx) error {
+	logx.Println("Received request to schedule task", string(c.Body()))
 	var user User
 	if err := c.BodyParser(&user); err != nil {
-		log.Println("Error parsing request body in scheduleHandler:", err)
+		logx.Println("Error parsing request body in scheduleHandler:", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
 	var storedUser User
 	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND token = ?", user.Username, user.Token).Scan(&storedUser.ID)
 	if err != nil {
-		log.Println("Unauthorized access attempt by user:", user.Username, "Error:", err)
+		logx.Println("Unauthorized access attempt by user:", user.Username, "Error:", err)
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or token"})
 	}
 
 	var task Task
 	if err := c.BodyParser(&task); err != nil {
-		log.Println("Error parsing task input in scheduleHandler:", err)
+		logx.Println("Error parsing task input in scheduleHandler:", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
@@ -128,17 +128,17 @@ func scheduleHandler(c *fiber.Ctx) error {
 	var existingTaskID int64
 	err = db.QueryRow("SELECT id FROM tasks WHERE user_id = ? AND name = ?", task.UserID, task.Name).Scan(&existingTaskID)
 	if err == nil {
-		log.Printf("Task with the same user_id and name already exists. Task ID: %d\n", existingTaskID)
+		logx.Printf("Task with the same user_id and name already exists. Task ID: %d\n", existingTaskID)
 		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "Task with the same name already exists for this user"})
 	} else if err != sql.ErrNoRows {
-		log.Println("Error checking for existing task in scheduleHandler:", err)
+		logx.Println("Error checking for existing task in scheduleHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check for existing task"})
 	}
 
 	// Start a transaction
 	tx, err := db.Begin()
 	if err != nil {
-		log.Println("Error starting transaction in scheduleHandler:", err)
+		logx.Println("Error starting transaction in scheduleHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to start transaction"})
 	}
 
@@ -146,7 +146,7 @@ func scheduleHandler(c *fiber.Ctx) error {
 	stmt, err := tx.Prepare(`INSERT INTO tasks(user_id, name, message, url, interval, start, end, is_recurring, enabled)
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
 	if err != nil {
-		log.Println("Error preparing statement in scheduleHandler:", err)
+		logx.Println("Error preparing statement in scheduleHandler:", err)
 		tx.Rollback() // Rollback the transaction in case of error
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to schedule task"})
 	}
@@ -155,14 +155,14 @@ func scheduleHandler(c *fiber.Ctx) error {
 	var lastInsertID int64
 	err = stmt.QueryRow(task.UserID, task.Name, task.Message, task.URL, task.Interval, task.Start, task.End, task.IsRecurring, task.Enabled).Scan(&lastInsertID)
 	if err != nil {
-		log.Println("Error executing statement to schedule task:", err)
+		logx.Println("Error executing statement to schedule task:", err)
 		tx.Rollback() // Rollback the transaction in case of error
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to schedule task"})
 	}
 
 	// Commit the transaction
 	if err := tx.Commit(); err != nil {
-		log.Println("Error committing transaction in scheduleHandler:", err)
+		logx.Println("Error committing transaction in scheduleHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to commit transaction"})
 	}
 
@@ -183,7 +183,7 @@ func scheduleHandler(c *fiber.Ctx) error {
 		},
 	}
 
-	log.Printf("Task scheduled: %+v\n", response["task"])
+	logx.Printf("Task scheduled: %+v\n", response["task"])
 	return c.JSON(response)
 }
 
@@ -197,31 +197,31 @@ func setTaskEnabledHandler(c *fiber.Ctx) error {
 
 	var req request
 	if err := c.BodyParser(&req); err != nil {
-		log.Println("Error parsing request body in setTaskEnabledHandler:", err)
+		logx.Println("Error parsing request body in setTaskEnabledHandler:", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
 	var storedUser User
 	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND token = ?", req.Username, req.Token).Scan(&storedUser.ID)
 	if err != nil {
-		log.Println("Unauthorized access attempt by user:", req.Username, "Error:", err)
+		logx.Println("Unauthorized access attempt by user:", req.Username, "Error:", err)
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or token"})
 	}
 
 	stmt, err := db.Prepare("UPDATE tasks SET enabled = ? WHERE user_id = ? AND id = ?")
 	if err != nil {
-		log.Println("Error preparing statement in setTaskEnabledHandler:", err)
+		logx.Println("Error preparing statement in setTaskEnabledHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update task"})
 	}
 	defer stmt.Close()
 
 	_, err = stmt.Exec(req.Enabled, storedUser.ID, req.TaskID)
 	if err != nil {
-		log.Println("Error executing statement in setTaskEnabledHandler:", err)
+		logx.Println("Error executing statement in setTaskEnabledHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update task"})
 	}
 
-	log.Printf("Task ID %d for user ID %d set to enabled: %v\n", req.TaskID, storedUser.ID, req.Enabled)
+	logx.Printf("Task ID %d for user ID %d set to enabled: %v\n", req.TaskID, storedUser.ID, req.Enabled)
 
 	// Include task details in the response
 	response := fiber.Map{
@@ -240,29 +240,29 @@ func fetchTasksHandler(c *fiber.Ctx) error {
 		Username string `json:"username"`
 		Token    string `json:"token"`
 	}
-
+	logx.Println("Received request to fetch tasks", string(c.Body()))
 	// Parse the request body
 	if err := c.BodyParser(&req); err != nil {
-		log.Println("Error parsing request body in fetchTasksHandler:", err)
+		logx.Println("Error parsing request body in fetchTasksHandler:", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
-	log.Printf("Received request to fetch tasks for user: %s\n", req.Username)
+	logx.Printf("Received request to fetch tasks for user: %s\n", req.Username)
 
 	var storedUser User
 	// Check if the user exists and the token is valid
 	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND token = ?", req.Username, req.Token).Scan(&storedUser.ID)
 	if err != nil {
-		log.Println("Unauthorized access attempt by user:", req.Username, "Error:", err)
+		logx.Println("Unauthorized access attempt by user:", req.Username, "Error:", err)
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or token"})
 	}
 
-	log.Printf("User verified. User ID: %d\n", storedUser.ID)
+	logx.Printf("User verified. User ID: %d\n", storedUser.ID)
 
 	// Query tasks for the user
 	rows, err := db.Query("SELECT id, message, name, url, interval, start, end, is_recurring, enabled FROM tasks WHERE user_id = ?", storedUser.ID)
 	if err != nil {
-		log.Println("Error retrieving tasks for user ID:", storedUser.ID, "Error:", err)
+		logx.Println("Error retrieving tasks for user ID:", storedUser.ID, "Error:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve tasks"})
 	}
 	defer rows.Close()
@@ -271,18 +271,18 @@ func fetchTasksHandler(c *fiber.Ctx) error {
 	for rows.Next() {
 		var task Task
 		if err := rows.Scan(&task.ID, &task.Message, &task.Name, &task.URL, &task.Interval, &task.Start, &task.End, &task.IsRecurring, &task.Enabled); err != nil {
-			log.Println("Error scanning task for user ID:", storedUser.ID, "Error:", err)
+			logx.Println("Error scanning task for user ID:", storedUser.ID, "Error:", err)
 			// return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to scan tasks"})
 			continue
 		}
 		tasks = append(tasks, task)
-		log.Printf("Task retrieved for user ID %d: %+v\n", storedUser.ID, task)
+		logx.Printf("Task retrieved for user ID %d: %+v\n", storedUser.ID, task)
 	}
 
 	if len(tasks) == 0 {
-		log.Printf("No tasks found for user ID %d\n", storedUser.ID)
+		logx.Printf("No tasks found for user ID %d\n", storedUser.ID)
 	} else {
-		log.Printf("Total tasks retrieved for user ID %d: %d\n", storedUser.ID, len(tasks))
+		logx.Printf("Total tasks retrieved for user ID %d: %d\n", storedUser.ID, len(tasks))
 	}
 
 	return c.JSON(fiber.Map{"tasks": tasks})
@@ -290,15 +290,15 @@ func fetchTasksHandler(c *fiber.Ctx) error {
 
 // deleteTaskHandler deletes a task for a specific user based on task ID.
 func deleteTaskHandler(c *fiber.Ctx) error {
+	logx.Println("Received request to delete task", string(c.Body()))
 	type request struct {
 		Username string `json:"username"`
 		Token    string `json:"token"`
 		TaskID   int    `json:"task_id"`
 	}
-
 	var req request
 	if err := c.BodyParser(&req); err != nil {
-		log.Println("Error parsing request body in deleteTaskHandler:", err)
+		logx.Println("Error parsing request body in deleteTaskHandler:", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
@@ -306,14 +306,14 @@ func deleteTaskHandler(c *fiber.Ctx) error {
 	var storedUser User
 	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND token = ?", req.Username, req.Token).Scan(&storedUser.ID)
 	if err != nil {
-		log.Println("Unauthorized access attempt by user:", req.Username, "Error:", err)
+		logx.Println("Unauthorized access attempt by user:", req.Username, "Error:", err)
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or token"})
 	}
 
 	// Prepare the delete statement
 	stmt, err := db.Prepare("DELETE FROM tasks WHERE user_id = ? AND id = ?")
 	if err != nil {
-		log.Println("Error preparing statement in deleteTaskHandler:", err)
+		logx.Println("Error preparing statement in deleteTaskHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to prepare delete task"})
 	}
 	defer stmt.Close()
@@ -321,23 +321,23 @@ func deleteTaskHandler(c *fiber.Ctx) error {
 	// Execute the delete statement
 	result, err := stmt.Exec(storedUser.ID, req.TaskID)
 	if err != nil {
-		log.Println("Error executing delete statement in deleteTaskHandler:", err)
+		logx.Println("Error executing delete statement in deleteTaskHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete task"})
 	}
 
 	// Check if any rows were affected
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		log.Println("Error getting rows affected in deleteTaskHandler:", err)
+		logx.Println("Error getting rows affected in deleteTaskHandler:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to determine if task was deleted"})
 	}
 
 	if rowsAffected == 0 {
-		log.Printf("No task found with ID %d for user ID %d\n", req.TaskID, storedUser.ID)
+		logx.Printf("No task found with ID %d for user ID %d\n", req.TaskID, storedUser.ID)
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
 	}
 
-	log.Printf("Task ID %d deleted for user ID %d\n", req.TaskID, storedUser.ID)
+	logx.Printf("Task ID %d deleted for user ID %d\n", req.TaskID, storedUser.ID)
 
 	return c.JSON(fiber.Map{"message": "Task deleted successfully"})
 }
